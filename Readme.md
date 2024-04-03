@@ -6,6 +6,14 @@ This repo contains my progress for the IMC Prosperity challenge 2024.
 - [Wiki](https://imc-prosperity.notion.site/Prosperity-2-Wiki-fe650c0292ae4cdb94714a3f5aa74c85)
 - [Contest site](https://prosperity.imc.com/archipelago)
 
+## Progress
+
+- Tutorials.py's results
+
+![Results](/pics/tutorial.png)
+
+
+
 # Contributors 
 
 - [Gaurav Sangwan](github.com/gauravsangwan)
