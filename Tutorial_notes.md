@@ -7,15 +7,16 @@
 - 15 days total length is divided into 5 rounds ..... each round lasts 72 hours. 
 - All algorithms are independent among the playes. 
 - 72 hours to submit the python program 
-- Round timings are in UTC. 
-                | Event | Dates |
-                |---|---|
-                | Tutorial | Feb 12, 9:00 → Apr 8, 9:00 |
-                | Round 1 | Apr 8, 9:00 → Apr 11, 9:00 |
-                | Round 2 | Apr 11, 9:00 → Apr 14, 9:00 |
-                | Round 3 | Apr 14, 9:00 → Apr 17, 9:00 |
-                | Round 4 | Apr 17, 9:00 → Apr 20, 9:00 |
-                | Round 5 | Apr 20, 9:00 → Apr 23, 9:00 |
+- Round timings are in UTC
+
+| Event | Dates |
+|---|---|
+| Tutorial | Feb 12, 9:00 → Apr 8, 9:00 |
+| Round 1 | Apr 8, 9:00 → Apr 11, 9:00 |
+| Round 2 | Apr 11, 9:00 → Apr 14, 9:00 |
+| Round 3 | Apr 14, 9:00 → Apr 17, 9:00 |
+| Round 4 | Apr 17, 9:00 → Apr 20, 9:00 |
+| Round 5 | Apr 20, 9:00 → Apr 23, 9:00 |
 
 ---
 
