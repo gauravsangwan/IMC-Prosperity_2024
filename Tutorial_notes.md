@@ -84,3 +84,16 @@ class Trader:
         conversions = 1
         return result, conversions, traderData
 ```
+
+
+
+
+
+## Links
+
+- [STANFORD_CARDINAL](https://github.com/ShubhamAnandJain/IMC-Prosperity-2023-Stanford-Cardinal)
+- [Arima](https://github.com/kzqiu/imc-2023/tree/master)
+- [Boolinger](https://github.com/Kratos-is-here/IMC-Trading-Prosperity)
+- [Algo_visualiser](https://github.com/jmerle/imc-prosperity-2-visualizer)
+- [Ranked57th](https://github.com/MichalOkon/imc_prosperity)
+- [TEETAJP](https://github.com/teetajp/IMC-Prosperity)
