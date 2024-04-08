@@ -16,7 +16,7 @@ This repo contains my progress for the IMC Prosperity challenge 2024.
 ## Progress
 
 - Tutorials.py's results
-<img src="/pics/tutorial.png" width="100" height="100" alt="Results">
+<img src="/pics/tutorial.png" width="400" height="400" alt="Results">
 
 
 - Round 1 : [Link](/Round1/Round1.md)
