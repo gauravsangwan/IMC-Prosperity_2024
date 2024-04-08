@@ -14,7 +14,7 @@ I will try to run a linear regression on the final few timesteps of starfruit pr
 
 ## Possible Ideas
 
-Aquatic Amethysts, have a position limit of **20**, and it is [hypothesized](.ul) that the price doesnot oscillates must and we must play on bid ask spread. 
+Aquatic Amethysts, have a position limit of **20**, and it is [hypothesized]() that the price doesnot oscillates must and we must play on bid ask spread. 
 
 
 ---
