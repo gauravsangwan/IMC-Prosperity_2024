@@ -1,6 +1,6 @@
 import json
 from datamodel import Listing, Observation, Order, OrderDepth, ProsperityEncoder, Symbol, Trade, TradingState
-from typing import Any
+from typing import Any, List
 import collections 
 from collections import defaultdict
 import random
@@ -10,7 +10,7 @@ import numpy as np
 
 MAX_INT = int(1e9)
 
-empty_dict = {'AMETHYSTS':0,'STARFRUIT':0}
+empty_dict = {'AMETHYSTS':0,'STARFRUIT':0, 'ORCHIDS':0}
 
 class Logger:
     def __init__(self) -> None:
@@ -123,7 +123,7 @@ def default_value():
 class Trader:
 
     position = copy.deepcopy(empty_dict)
-    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20}
+    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100}
     volume_traded = copy.deepcopy(empty_dict)
 
     person_position = defaultdict(default_value)
@@ -133,17 +133,23 @@ class Trader:
 
     startfruit_cache = []
     startfruit_dim = 4
+
+    orchid_cache = []
+    orchid_dim = 4
+    orchid_best_bid = 1e9
     steps = 0
+    timestamp = 0
 
-
+    Orchids_conditions = {'sunlight':0,'humidity':0,'transportFees':0,'importTariff':0,'exportTariff':0,'bidPrice':0,'askPrice':0}
+    # orchids_condition_cache = {'sunlight':[],'humidity':[],'transportFees':[],'importTariff':[],'exportTariff':[],'bidPrice':[],'askPrice':[]}
 
     def calc_next_price_starfruit(self):
         #OLD
-        coef = [-0.01869561,  0.0455032 ,  0.16316049,  0.8090892]
-        intercept = 4.481696494462085
+        # coef = [-0.01869561,  0.0455032 ,  0.16316049,  0.8090892]
+        # intercept = 4.481696494462085
         #4D
-        #coef = [-0.6563098,  -0.41592724, -0.24971836, -0.1220081 ]
-        #intercept = 1.2886011626592033e-07
+        coef = [-0.6563098,  -0.41592724, -0.24971836, -0.1220081 ]
+        intercept = 1.2886011626592033e-07
         #7D
 #         coef = [-0.67067438, -0.44602041, -0.29958834, -0.20004169, -0.11883134, -0.05827812,
 #  -0.01558487]
@@ -153,9 +159,28 @@ class Trader:
         # intercept = 5.460255106903702e-07
         
         nxt_price = intercept
-        for i, val in enumerate(self.startfruit_cache):
+        for i, val in enumerate(self.orchid_cache):
             nxt_price += val * coef[i]
 
+        return int(round(nxt_price))
+    
+    def conversion_pnl(self,conversions):
+        if conversions == 0:
+            return 0
+        try:
+            pnl = conversions*(self.orchid_best_bid - self.Orchids_conditions['askPrice']-self.Orchids_conditions['importTariff']-self.Orchids_conditions['transportFees'])
+        except:
+            pnl = 0
+        return pnl
+        
+    
+    def calc_next_price_orchids(self):
+        coef = [ 9.98373150e-01, -8.69115119e-03,  1.05740604e-02, -4.04105603e-04]
+        intercept = 0.1599006652695607
+
+        nxt_price = intercept
+        for i, val in enumerate(self.startfruit_cache):
+            nxt_price += val * coef[i]
         return int(round(nxt_price))
     
     def extract_values(self,order_dict,buy = 0):
@@ -254,7 +279,7 @@ class Trader:
 
         sell_vol, best_sell_pr = self.extract_values(osell)
         buy_vol, best_buy_pr = self.extract_values(obuy, 1)
-
+        cpos = self.position[product]
         cpos = self.position[product]
 
         for ask, vol in osell.items():
@@ -293,6 +318,46 @@ class Trader:
 
         return orders
     
+    def compute_orders_regression_orchids(self, product, order_depth, acc_bid, acc_ask, LIMIT):
+        orders: list[Order] = []
+
+        osell = collections.OrderedDict(sorted(order_depth.sell_orders.items()))
+        obuy = collections.OrderedDict(sorted(order_depth.buy_orders.items(), reverse=True))
+
+        sell_vol, best_sell_pr = self.extract_values(osell)
+        buy_vol, best_buy_pr = self.extract_values(obuy, 1)
+        cpos = self.position[product]
+        cpos = self.position[product]
+
+        for ask, vol in osell.items():
+            if ((ask <= acc_bid) or ((self.position[product]<0) and (ask == acc_bid+1))) and cpos < LIMIT:
+                order_for = min(-vol, LIMIT - cpos)
+                cpos += order_for
+                assert(order_for >= 0)
+                orders.append(Order(product, ask, order_for))
+
+        undercut_buy = best_buy_pr + 1
+        undercut_sell = best_sell_pr - 1
+
+        bid_pr = min(undercut_buy, acc_bid) # we will shift this by 1 to beat this price
+        sell_pr = max(undercut_sell, acc_ask)
+        Orchids_lb = acc_bid['ORCHIDS']
+        Orchids_ub = acc_ask['ORCHIDS']
+        next_price = Orchids_lb + 1
+        if cpos < LIMIT:
+            num = LIMIT - cpos
+            if next_price >= Orchids_lb and next_price <= Orchids_ub:
+                orders.append(Order(product, next_price, num))
+            else:
+                if bid_pr < self.orchid_best_bid:
+                    self.orchid_best_bid = bid_pr
+                orders.append(Order(product, bid_pr, num))
+        cpos = self.position[product]
+        
+
+
+        return orders
+    
     def compute_orders(self, product, order_depth, acc_bid, acc_ask):
 
         if product == "AMETHYSTS":
@@ -301,37 +366,58 @@ class Trader:
         if product == "STARFRUIT":
             return self.compute_orders_regression(product, order_depth, acc_bid, acc_ask, self.POSITION_LIMIT[product])
         
+        if product == 'ORCHIDS':
+            return self.compute_orders_regression(product, order_depth, acc_bid, acc_ask, self.POSITION_LIMIT[product])
+        
 
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:
-        result = {'AMETHYSTS': [], 'STARFRUIT': []}
-        logger.log(state.toJSON())
+        result = {'AMETHYSTS': [], 'STARFRUIT': [], 'ORCHIDS': []}
+        conversions = 0
+        # logger.log(state.toJSON())
         for key, val in state.position.items():
             self.position[key] = val
         for key, val in self.position.items():
             logger.print(f'{key} position: {val}')
-        
+        observations = state.observations.conversionObservations["ORCHIDS"]
+        self.Orchids_conditions = {'sunlight':observations.sunlight,'humidity':observations.humidity,'transportFees':observations.transportFees,'importTariff':observations.importTariff,'exportTariff':observations.exportTariff,'bidPrice':observations.bidPrice,'askPrice':observations.askPrice}
+
+
         timestamp = state.timestamp
+        self.timestamp = timestamp
 
         if len(self.startfruit_cache) == self.startfruit_dim:
             self.startfruit_cache.pop(0)
+        
+        if len(self.orchid_cache) == self.orchid_dim:
+            self.orchid_cache.pop(0)
 
         _, bs_starfruit = self.extract_values(collections.OrderedDict(sorted(state.order_depths['STARFRUIT'].sell_orders.items())))
         _, bb_starfruit = self.extract_values(collections.OrderedDict(sorted(state.order_depths['STARFRUIT'].buy_orders.items(), reverse=True)), 1)
 
+        _, bs_orchid = self.extract_values(collections.OrderedDict(sorted(state.order_depths['ORCHIDS'].sell_orders.items())))
+        _, bb_orchid = self.extract_values(collections.OrderedDict(sorted(state.order_depths['ORCHIDS'].buy_orders.items(), reverse=True)), 1)
+
         self.startfruit_cache.append((bs_starfruit + bb_starfruit)/2)
+        self.orchid_cache.append((bs_orchid + bb_orchid)/2)
 
         starfruit_lb = -MAX_INT
         starfruit_ub = MAX_INT
+        orchid_lb = -MAX_INT
+        orchid_ub = MAX_INT
 
         if len(self.startfruit_cache) == self.startfruit_dim:
             starfruit_lb = self.calc_next_price_starfruit() - 1
             starfruit_ub = self.calc_next_price_starfruit() + 1
         
+        if len(self.orchid_cache) == self.orchid_dim:
+            orchid_lb = self.calc_next_price_orchids() - 1
+            orchid_ub = self.calc_next_price_orchids() + 1
+        
         amethyst_lb = 10000
         amethyst_ub = 10000
 
-        acc_bid = {'AMETHYSTS': amethyst_lb, 'STARFRUIT': starfruit_lb}
-        acc_ask = {'AMETHYSTS': amethyst_ub, 'STARFRUIT': starfruit_ub}
+        acc_bid = {'AMETHYSTS': amethyst_lb, 'STARFRUIT': starfruit_lb, 'ORCHIDS': orchid_lb}
+        acc_ask = {'AMETHYSTS': amethyst_ub, 'STARFRUIT': starfruit_ub, 'ORCHIDS': orchid_ub}
 
         self.steps +=1 
 
@@ -349,6 +435,34 @@ class Trader:
             orders = self.compute_orders(product,order_depth,acc_bid[product],acc_ask[product])
             result[product] += orders
 
+        for product in ['ORCHIDS']:
+            order_depth: OrderDepth = state.order_depths[product]
+            orders: List[Order] = []
+            acceptable_price = 1050  # Participant should calculate this value
+            logger.print("Acceptable price : " + str(acceptable_price))
+            logger.print("Buy Order depth : " + str(len(order_depth.buy_orders)) + ", Sell order depth : " + str(len(order_depth.sell_orders)))
+    
+            if len(order_depth.sell_orders) != 0:
+                best_ask, best_ask_amount = list(order_depth.sell_orders.items())[0]
+                if int(best_ask) < acceptable_price:
+                    logger.print("BUY", str(-best_ask_amount) + "x", best_ask)
+                    orders.append(Order(product, best_ask, -best_ask_amount))
+                    conversions = 1
+    
+            if len(order_depth.buy_orders) != 0:
+                best_bid, best_bid_amount = list(order_depth.buy_orders.items())[0]
+                if int(best_bid) > acceptable_price:
+                    logger.print("SELL", str(best_bid_amount) + "x", best_bid)
+                    orders.append(Order(product, best_bid, -best_bid_amount))
+              
+            result[product] += orders
+
+        best_pnl_conver = 0
+        for i in range(1,6):
+            if self.conversion_pnl(i) > best_pnl_conver:
+                best_pnl_conver = self.conversion_pnl(i)
+                conversions = i
+                
         for product in state.own_trades.keys():
             for trade in state.own_trades[product]:
                 if trade.timestamp != state.timestamp-100:
@@ -378,7 +492,7 @@ class Trader:
         logger.print(f"Timestamp {timestamp}, Total PNL ended up being {totpnl}")
         # print(f'Will trade {result}')
         logger.print("End transmission")
-        conversions = 0
+    
         trader_data = ""
         # del result['STARFRUIT']
         logger.flush(state, result,conversions,trader_data)
