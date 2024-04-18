@@ -23,7 +23,10 @@ https://github.com/zazhang/ep-chan-book-algo-trading/blob/master/notebook/EP%20C
 
 - Round 1 : [Link](/Round1/Round1.md)
 
-> Rank after round 1 345th. 
+> Rank after round 1 345th(overall), 70 in algotrading.
+> Rank after round 2 pretty dumped.
+
+
 
 
 

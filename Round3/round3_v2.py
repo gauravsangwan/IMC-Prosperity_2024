@@ -388,6 +388,27 @@ class Trader:
         
         timestamp = state.timestamp
 
+        if len(self.startfruit_cache) == self.startfruit_dim:
+            self.startfruit_cache.pop(0)
+
+        _, bs_starfruit = self.extract_values(collections.OrderedDict(sorted(state.order_depths['STARFRUIT'].sell_orders.items())))
+        _, bb_starfruit = self.extract_values(collections.OrderedDict(sorted(state.order_depths['STARFRUIT'].buy_orders.items(), reverse=True)), 1)
+
+        self.startfruit_cache.append((bs_starfruit + bb_starfruit)/2)
+
+        starfruit_lb = -MAX_INT
+        starfruit_ub = MAX_INT
+
+        if len(self.startfruit_cache) == self.startfruit_dim:
+            starfruit_lb = self.calc_next_price_starfruit() - 1
+            starfruit_ub = self.calc_next_price_starfruit() + 1
+        
+        amethyst_lb = 10000
+        amethyst_ub = 10000
+
+        acc_bid = {'AMETHYSTS': amethyst_lb, 'STARFRUIT': starfruit_lb}
+        acc_ask = {'AMETHYSTS': amethyst_ub, 'STARFRUIT': starfruit_ub}
+
         self.steps +=1 
 
         for product in state.market_trades.keys():
@@ -400,30 +421,30 @@ class Trader:
                 self.person_actvalof_position[trade.seller][product] += -trade.quantity
         
         for product in self.PRODS:
-            # if product == 'AMETHYSTS' or product == 'STARFRUIT':
-            #     order_depth: OrderDepth = state.order_depths[product]
-            #     orders = self.compute_orders(product,order_depth,acc_bid[product],acc_ask[product])
-            #     result[product] += orders
-            # elif product == 'ORCHIDS' :
-            #     order_depth: OrderDepth = state.order_depths[product]
-            #     orders: list[Order] = []
-            #     shipping_cost = state.observations.conversionObservations['ORCHIDS'].transportFees
-            #     import_tariff = state.observations.conversionObservations['ORCHIDS'].importTariff
-            #     export_tariff = state.observations.conversionObservations['ORCHIDS'].exportTariff
-            #     ducks_ask = state.observations.conversionObservations['ORCHIDS'].askPrice
-            #     ducks_bid = state.observations.conversionObservations['ORCHIDS'].bidPrice
-            #     buy_from_ducks_prices = ducks_ask + shipping_cost + import_tariff
-            #     sell_to_ducks_prices = ducks_bid + shipping_cost + export_tariff
+            if product == 'AMETHYSTS' or product == 'STARFRUIT':
+                order_depth: OrderDepth = state.order_depths[product]
+                orders = self.compute_orders(product,order_depth,acc_bid[product],acc_ask[product])
+                result[product] += orders
+            elif product == 'ORCHIDS' :
+                order_depth: OrderDepth = state.order_depths[product]
+                orders: list[Order] = []
+                shipping_cost = state.observations.conversionObservations['ORCHIDS'].transportFees
+                import_tariff = state.observations.conversionObservations['ORCHIDS'].importTariff
+                export_tariff = state.observations.conversionObservations['ORCHIDS'].exportTariff
+                ducks_ask = state.observations.conversionObservations['ORCHIDS'].askPrice
+                ducks_bid = state.observations.conversionObservations['ORCHIDS'].bidPrice
+                buy_from_ducks_prices = ducks_ask + shipping_cost + import_tariff
+                sell_to_ducks_prices = ducks_bid + shipping_cost + export_tariff
 
-            #     orchids_lb = int(round(buy_from_ducks_prices))-1
-            #     orchids_ub = int(round(buy_from_ducks_prices))+1
-            #     orders += self.calculate_orders(product, order_depth, orchids_lb,orchids_ub, orchid=True)
-            #     conversions = -self.position[product]
+                orchids_lb = int(round(buy_from_ducks_prices))-1
+                orchids_ub = int(round(buy_from_ducks_prices))+1
+                orders += self.calculate_orders(product, order_depth, orchids_lb,orchids_ub, orchid=True)
+                conversions = -self.position[product]
 
-            #     # logger.print(f'buying from ducks for: {buy_from_ducks_prices}')
-            #     # logger.print(f'selling to ducks for: {sell_to_ducks_prices}')
-            #     result[product] += orders
-            if product == 'GIFT_BASKET':
+                # logger.print(f'buying from ducks for: {buy_from_ducks_prices}')
+                # logger.print(f'selling to ducks for: {sell_to_ducks_prices}')
+                result[product] += orders
+            elif product == 'GIFT_BASKET':
                 order_depth: OrderDepth = state.order_depths[product]
                 orders: list[Order] = []
                 _, choco_best_sell_price = self.get_volume_and_best_price(state.order_depths['CHOCOLATE'].sell_orders, buy_order=False)
@@ -450,7 +471,7 @@ class Trader:
                 
                 elif difference < -self.PERCENT_OF_STD_TO_TRADE_AT * self.DIFFERENCE_STD: # basket undervalued, buy
                     orders += self.calculate_orders(product, order_depth, worst_ask_price, MAX_INT)
-                logger.print("ORDERS",orders)
+                # logger.print("ORDERS",orders)
                 result[product] += orders
 
 
@@ -486,7 +507,7 @@ class Trader:
         logger.print(f"Timestamp {timestamp}, Total PNL ended up being {totpnl}")
         # print(f'Will trade {result}')
         logger.print("End transmission")
-        conversions = 0
+        # conversions = 0
         trader_data = ""
         # del result['STARFRUIT']
         logger.flush(state, result,conversions,trader_data)
