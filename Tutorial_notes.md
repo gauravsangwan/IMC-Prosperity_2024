@@ -97,3 +97,6 @@ class Trader:
 - [Algo_visualiser](https://github.com/jmerle/imc-prosperity-2-visualizer)
 - [Ranked57th](https://github.com/MichalOkon/imc_prosperity)
 - [TEETAJP](https://github.com/teetajp/IMC-Prosperity)
+
+
+https://www.youtube.com/watch?v=JN2LZ9YcT6k

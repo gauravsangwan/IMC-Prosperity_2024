@@ -120,13 +120,13 @@ def default_value():
 
 MAX_INT = int(1e9)
 
-empty_dict = {'AMETHYSTS':0,'STARFRUIT':0, 'ORCHIDS':0,'CHOCOLATE':0,'STRAWBERRIES':0,'ROSES':0,'GIFT_BASKET':0}
+empty_dict = {'AMETHYSTS':0,'STARFRUIT':0, 'ORCHIDS':0,'CHOCOLATE':0,'STRAWBERRIES':0,'ROSES':0,'GIFT_BASKET':0,'COCONUT': 0, 'COCONUT_COUPON': 0}
 
 class Trader:
 
     position = copy.deepcopy(empty_dict)
-    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100,'CHOCOLATE':250,'STRAWBERRIES':350,'ROSES':60,'GIFT_BASKET':60}
-    PRODS = ['AMETHYSTS','STARFRUIT','ORCHIDS','CHOCOLATE','STRAWBERRIES','ROSES','GIFT_BASKET']
+    POSITION_LIMIT = {'AMETHYSTS': 20, 'STARFRUIT': 20, 'ORCHIDS': 100,'CHOCOLATE':250,'STRAWBERRIES':350,'ROSES':60,'GIFT_BASKET':60, 'COCONUT': 300, 'COCONUT_COUPON': 600}
+    PRODS = ['AMETHYSTS','STARFRUIT','ORCHIDS','CHOCOLATE','STRAWBERRIES','ROSES','GIFT_BASKET', 'COCONUT_COUPON','COCONUT']
     volume_traded = copy.deepcopy(empty_dict)
 
     person_position = defaultdict(default_value)
@@ -141,7 +141,28 @@ class Trader:
     ORCHID_MM_RANGE = 5
     DIFFERENCE_MEAN = 379.4904833333333
     DIFFERENCE_STD = 76.42438217375009
-    PERCENT_OF_STD_TO_TRADE_AT = 0.4
+    PERCENT_OF_STD_TO_TRADE_AT = 0.5
+
+
+    ITERS = 30_000
+    COUPON_DIFFERENCE_STD = 13.381768062409492
+    COCONUT_DIFFERENCE_STD = 88.75266514702373
+    PREV_COCONUT_PRICE = -1
+    PREV_COUPON_PRICE = -1
+    COCONUT_MEAN = 9999.900983333333
+    COCONUT_SUM = 299997029.5
+    COUPON_SUM = 19051393.0
+    COUPON_Z_SCORE = 0.5
+
+    COCONUT_STORE = []
+    COCONUT_STORE_SIZE = 25
+    COCONUT_BS_STORE = []
+
+    delta_signs = 1
+    time = 0
+
+    COUPON_IV_STORE = []
+    COUPON_IV_STORE_SIZE = 25
 
 
 
@@ -254,6 +275,39 @@ class Trader:
             curr_pos += num
 
         return orders
+    
+    def black_scholes(self, S, K, T, r, sigma, mean):
+        def N(x):
+        # return sp.stats.norm.cdf(x, mean, std**2)
+            return 0.5 * (1 + math.erf((x-mean) / (sigma**2*math.sqrt(2))))
+        
+        d1 = (np.log(S/K) + (r + sigma**2/2)*T) / (sigma*np.sqrt(T))
+        d2 = d1 - sigma * np.sqrt(T)
+        return S * N(d1) - K * np.exp(-r*T)* N(d2)
+
+    def black_scholes_price(self, S, K, t, r, sigma):
+        def cdf(x):
+            return 0.5 * (1 + math.erf(x/math.sqrt(2)))
+
+        d1 = (np.log(S / K) + (r + 0.5 * sigma**2) * t) / (sigma * np.sqrt(t))
+        d2 = d1 - sigma * np.sqrt(t)
+        price = S * cdf(d1) - K * np.exp(-r * t) * cdf(d2)
+        return price
+
+    def newtons_method(self, f, x0=0.02, epsilon=1e-7, max_iter=100, h=1e-5):
+        def numerical_derivative(f, x, h=1e-5):
+            return (f(x + h) - f(x - h)) / (2 * h)
+        
+        x = x0
+        for i in range(max_iter):
+            fx = f(x)
+            if abs(fx) < epsilon:
+                return x
+            dfx = numerical_derivative(f, x, h)
+            if dfx == 0:
+                raise ValueError("Derivative zero. No solution found.")
+            x -= fx / dfx
+        raise ValueError("Maximum iterations reached. No solution found.")
     
     def compute_orders_regression(self, product, order_depth, acc_bid, acc_ask, LIMIT):
         orders: list[Order] = []
@@ -380,13 +434,36 @@ class Trader:
         
 
     def run(self, state: TradingState) -> tuple[dict[Symbol, list[Order]], int, str]:
-        result = {'AMETHYSTS': [], 'STARFRUIT': [], 'ORCHIDS':[],'CHOCOLATE': [],'STRAWBERRIES':[],'ROSES':[],'GIFT_BASKET':[]}
+        # result = {'AMETHYSTS': [], 'STARFRUIT': [], 'ORCHIDS':[],'CHOCOLATE': [],'STRAWBERRIES':[],'ROSES':[],'GIFT_BASKET':[]}
+        result = {'AMETHYSTS': [], 'STARFRUIT': [], 'ORCHIDS':[],'CHOCOLATE': [],'STRAWBERRIES':[],'ROSES':[],'GIFT_BASKET':[],'COCONUT_COUPON':[],'COCONUT':[]}
+
         for key, val in state.position.items():
             self.position[key] = val
         for key, val in self.position.items():
             logger.print(f'{key} position: {val}')
         
         timestamp = state.timestamp
+
+        # if len(self.startfruit_cache) == self.startfruit_dim:
+        #     self.startfruit_cache.pop(0)
+
+        # _, bs_starfruit = self.extract_values(collections.OrderedDict(sorted(state.order_depths['STARFRUIT'].sell_orders.items())))
+        # _, bb_starfruit = self.extract_values(collections.OrderedDict(sorted(state.order_depths['STARFRUIT'].buy_orders.items(), reverse=True)), 1)
+
+        # self.startfruit_cache.append((bs_starfruit + bb_starfruit)/2)
+
+        # starfruit_lb = -MAX_INT
+        # starfruit_ub = MAX_INT
+
+        # if len(self.startfruit_cache) == self.startfruit_dim:
+        #     starfruit_lb = self.calc_next_price_starfruit() - 1
+        #     starfruit_ub = self.calc_next_price_starfruit() + 1
+        
+        # amethyst_lb = 10000
+        # amethyst_ub = 10000
+
+        # acc_bid = {'AMETHYSTS': amethyst_lb, 'STARFRUIT': starfruit_lb}
+        # acc_ask = {'AMETHYSTS': amethyst_ub, 'STARFRUIT': starfruit_ub}
 
         self.steps +=1 
 
@@ -423,36 +500,107 @@ class Trader:
             #     # logger.print(f'buying from ducks for: {buy_from_ducks_prices}')
             #     # logger.print(f'selling to ducks for: {sell_to_ducks_prices}')
             #     result[product] += orders
-            if product == 'GIFT_BASKET':
+            # elif product == 'GIFT_BASKET':
+            #     order_depth: OrderDepth = state.order_depths[product]
+            #     orders: list[Order] = []
+            #     _, choco_best_sell_price = self.get_volume_and_best_price(state.order_depths['CHOCOLATE'].sell_orders, buy_order=False)
+            #     _, choco_best_buy_price = self.get_volume_and_best_price(state.order_depths['CHOCOLATE'].buy_orders, buy_order=True)
+            #     _, straw_best_sell_price = self.get_volume_and_best_price(state.order_depths['STRAWBERRIES'].sell_orders, buy_order=False)
+            #     _, straw_best_buy_price = self.get_volume_and_best_price(state.order_depths['STRAWBERRIES'].buy_orders, buy_order=True)
+            #     _, roses_best_sell_price = self.get_volume_and_best_price(state.order_depths['ROSES'].sell_orders, buy_order=False)
+            #     _, roses_best_buy_price = self.get_volume_and_best_price(state.order_depths['ROSES'].buy_orders, buy_order=True)
+
+            #     basket_items = ['GIFT_BASKET', 'CHOCOLATE', 'STRAWBERRIES', 'ROSES']
+            #     mid_price = {}
+            #     for item in basket_items:
+            #         _, best_sell_price = self.get_volume_and_best_price(state.order_depths[item].sell_orders, buy_order=False)
+            #         _, best_buy_price = self.get_volume_and_best_price(state.order_depths[item].buy_orders, buy_order=True)
+
+            #         mid_price[item] = (best_sell_price+best_buy_price)/2
+            #     difference = mid_price['GIFT_BASKET'] - 4*mid_price['CHOCOLATE'] - 6*mid_price['STRAWBERRIES'] - mid_price['ROSES'] - self.DIFFERENCE_MEAN
+            #     logger.print(f'For basket, difference: {difference}')
+            #     worst_bid_price = min(order_depth.buy_orders.keys())
+            #     worst_ask_price = max(order_depth.sell_orders.keys())
+
+            #     if difference > self.PERCENT_OF_STD_TO_TRADE_AT * self.DIFFERENCE_STD: # basket overvalued, sell
+            #         orders += self.calculate_orders(product, order_depth, -MAX_INT, worst_bid_price)
+                
+            #     elif difference < -self.PERCENT_OF_STD_TO_TRADE_AT * self.DIFFERENCE_STD: # basket undervalued, buy
+            #         orders += self.calculate_orders(product, order_depth, worst_ask_price, MAX_INT)
+            #     # logger.print("ORDERS",orders)
+            #     result[product] += orders
+            if product == 'COCONUT_COUPON':
+                # if product == 'COCONUT_COUPON':
                 order_depth: OrderDepth = state.order_depths[product]
                 orders: list[Order] = []
-                _, choco_best_sell_price = self.get_volume_and_best_price(state.order_depths['CHOCOLATE'].sell_orders, buy_order=False)
-                _, choco_best_buy_price = self.get_volume_and_best_price(state.order_depths['CHOCOLATE'].buy_orders, buy_order=True)
-                _, straw_best_sell_price = self.get_volume_and_best_price(state.order_depths['STRAWBERRIES'].sell_orders, buy_order=False)
-                _, straw_best_buy_price = self.get_volume_and_best_price(state.order_depths['STRAWBERRIES'].buy_orders, buy_order=True)
-                _, roses_best_sell_price = self.get_volume_and_best_price(state.order_depths['ROSES'].sell_orders, buy_order=False)
-                _, roses_best_buy_price = self.get_volume_and_best_price(state.order_depths['ROSES'].buy_orders, buy_order=True)
 
-                basket_items = ['GIFT_BASKET', 'CHOCOLATE', 'STRAWBERRIES', 'ROSES']
-                mid_price = {}
-                for item in basket_items:
+                items = ['COCONUT', 'COCONUT_COUPON']
+                mid_price, best_bid_price, best_ask_price = {}, {}, {}
+                for item in items : 
                     _, best_sell_price = self.get_volume_and_best_price(state.order_depths[item].sell_orders, buy_order=False)
                     _, best_buy_price = self.get_volume_and_best_price(state.order_depths[item].buy_orders, buy_order=True)
 
                     mid_price[item] = (best_sell_price+best_buy_price)/2
-                difference = mid_price['GIFT_BASKET'] - 4*mid_price['CHOCOLATE'] - 6*mid_price['STRAWBERRIES'] - mid_price['ROSES'] - self.DIFFERENCE_MEAN
-                logger.print(f'For basket, difference: {difference}')
-                worst_bid_price = min(order_depth.buy_orders.keys())
-                worst_ask_price = max(order_depth.sell_orders.keys())
+                    best_bid_price[item] = best_buy_price
+                    best_ask_price[item] = best_sell_price
 
-                if difference > self.PERCENT_OF_STD_TO_TRADE_AT * self.DIFFERENCE_STD: # basket overvalued, sell
-                    orders += self.calculate_orders(product, order_depth, -MAX_INT, worst_bid_price)
+                self.COCONUT_SUM += mid_price['COCONUT']
+                self.COUPON_SUM += mid_price['COCONUT_COUPON']
+                self.ITERS += 1
+                coconut_mean = self.COCONUT_SUM/self.ITERS
+                coupon_mean = self.COUPON_SUM/self.ITERS
+
+                self.COCONUT_STORE.append(mid_price['COCONUT'])
+                store = np.array(self.COCONUT_STORE)
+                mean, std = np.mean(store), np.std(store)
+
+                iv = self.newtons_method(lambda sigma: self.black_scholes_price(mid_price['COCONUT'], 10_000, 250, 0, sigma) - mid_price['COCONUT_COUPON'])
+                logger.print("IV",iv)
+                self.COUPON_IV_STORE.append(iv)
+                # bs_std = np.std(self.COCONUT_BS_STORE)
+
+
+                # predicted_coupon_price = (mid_price['COCONUT'] - coconut_mean) * self.COUPON_Z_SCORE + coupon_mean
+                # predicted_coupon_price = (mid_price['COCONUT'] - coconut_mean) * 0.503+ coupon_mean
+
+                # logger.print(f'For coconut coupon, predicted price: {predicted_coupon_price}')
+                # difference = mid_price['COCONUT_COUPON'] - predicted_coupon_price
+
+
+                # if difference > self.COUPON_Z_SCORE * self.COUPON_DIFFERENCE_STD: # coupon overvalued, sell
+                #     orders += self.calculate_orders(product, order_depth, -MAX_INT, best_bid_price['COCONUT_COUPON'])
                 
-                elif difference < -self.PERCENT_OF_STD_TO_TRADE_AT * self.DIFFERENCE_STD: # basket undervalued, buy
-                    orders += self.calculate_orders(product, order_depth, worst_ask_price, MAX_INT)
-                logger.print("ORDERS",orders)
-                result[product] += orders
+                # elif difference < -self.COUPON_Z_SCORE * self.COUPON_DIFFERENCE_STD:
+                #     orders += self.calculate_orders(product, order_depth, best_ask_price['COCONUT_COUPON'], MAX_INT)
+                # result[product] += orders
 
+
+                if len(self.COUPON_IV_STORE) >= self.COUPON_IV_STORE_SIZE:
+                    # coco_price = mid_price['COCONUT']
+                    # logger.print(f'coconut price: {coco_price}, mean: {mean}, std: {std}')
+                    # logger.print(f'predicted coupon price: {curr_bs_est}')
+                    # difference = mid_price['COCONUT_COUPON'] - curr_bs_est
+
+                    iv_mean, iv_std = np.mean(self.COUPON_IV_STORE), np.std(self.COUPON_IV_STORE)
+
+                    difference = iv - iv_mean
+
+                    if difference > self.COUPON_Z_SCORE * iv_std:
+                        # iv too high, overpriced, sell
+                        orders += self.calculate_orders(product, order_depth, -MAX_INT, best_bid_price['COCONUT_COUPON'])
+                        
+                    elif difference < -self.COUPON_Z_SCORE * iv_std:
+                        # iv too low, underpriced, buy
+                        orders += self.calculate_orders(product, order_depth, best_ask_price['COCONUT_COUPON'], MAX_INT)
+
+                    # self.COCONUT_STORE.pop(0)
+                    # self.COCONUT_BS_STORE.pop(0)
+
+                    self.COUPON_IV_STORE.pop(0)
+                
+                self.PREV_COCONUT_PRICE = mid_price['COCONUT']
+                self.PREV_COUPON_PRICE = mid_price['COCONUT_COUPON']
+                result[product] += orders
 
 
             # logger.print(f'placed orders: {orders}')     
