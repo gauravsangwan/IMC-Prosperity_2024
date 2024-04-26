@@ -100,3 +100,5 @@ class Trader:
 
 
 https://www.youtube.com/watch?v=JN2LZ9YcT6k
+
+https://www.youtube.com/watch?v=c0-I4ngbH1c
